@@ -1,8 +1,21 @@
-import { ApiError } from "../utils/ApiError.js";
-import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { uploadOnCloudinary } from "../utils/cloudinary.js";
+
+const generateTokens = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAccessToken();
+    const refreshToken = user.refreshAccessToken();
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(500, "Something went wrong while generating tokens");
+  }
+};
 
 const registerUser = asyncHandler(async (req, res) => {
   // get details from frontend
@@ -16,9 +29,7 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   // check if user already exists: email, username
-  const existedUser = await User.findOne({
-    $or: [{ email }, { username }],
-  });
+  const existedUser = await User.findOne({ $or: [{ email }, { username }] });
 
   if (existedUser) {
     throw new ApiError(409, "User with User name or Email already exists");
@@ -75,4 +86,60 @@ const registerUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(201, createdUser, "User registered successfully"));
 });
 
-export { registerUser };
+const loginUser = asyncHandler(async (req, res) => {
+  // get details from frontend
+  const { email, username, password } = req.body;
+
+  // validation
+  if (!username || !email) {
+    throw new ApiError(400, "User Name or Password is required");
+  }
+
+  // find the user
+  const user = await User.find({ $or: [{ username }, { email }] });
+  if (!user) {
+    throw new ApiError(404, "User does not exists");
+  }
+
+  // Check password
+  const isPasswordValid = await user.isPasswordCorrect(password);
+  if (!isPasswordValid) {
+    throw new ApiError(401, "Invalid user credentials");
+  }
+
+  // generate access and refresh token
+  const { accessToken, refreshToken } = await generateTokens(user._id);
+  const loggedUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
+
+  // This make cookie unmodifiable
+  const options = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  // send Cookies
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: loggedUser,
+          accessToken,
+          refreshToken,
+        },
+        "User logged Successfully"
+      )
+    );
+});
+
+
+const logoutUser = asyncHandler(async(req, res)=> {
+  
+})
+
+export { registerUser, loginUser };
