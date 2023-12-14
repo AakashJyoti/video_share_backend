@@ -17,6 +17,12 @@ const generateTokens = async (userId) => {
   }
 };
 
+// This make cookie unmodifiable
+const options = {
+  httpOnly: true,
+  secure: true,
+};
+
 const registerUser = asyncHandler(async (req, res) => {
   // get details from frontend
   const { fullName, email, username, password } = req.body;
@@ -113,12 +119,6 @@ const loginUser = asyncHandler(async (req, res) => {
     "-password -refreshToken"
   );
 
-  // This make cookie unmodifiable
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
-
   // send Cookies
   return res
     .status(200)
@@ -137,9 +137,18 @@ const loginUser = asyncHandler(async (req, res) => {
     );
 });
 
+const logoutUser = asyncHandler(async (req, res) => {
+  User.findByIdAndUpdate(req.user._id, {
+    $set: {
+      refreshToken: undefined,
+    },
+  });
 
-const logoutUser = asyncHandler(async(req, res)=> {
-  
-})
+  return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "User Logout successful"));
+});
 
-export { registerUser, loginUser };
+export { registerUser, loginUser, logoutUser };
