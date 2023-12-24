@@ -26,17 +26,17 @@ const options = {
 
 const registerUser = asyncHandler(async (req, res) => {
   // get details from frontend
-  const { fullName, email, username, password } = req.body;
+  const { fullName, email, userName, password } = req.body;
 
   // validation
   if (
-    [fullName, email, username, password].some((field) => field?.trim() === "")
+    [fullName, email, userName, password].some((field) => field?.trim() === "")
   ) {
     throw new ApiError(400, "All field are required");
   }
 
-  // check if user already exists: email, username
-  const existedUser = await User.findOne({ $or: [{ email }, { username }] });
+  // check if user already exists: email, userName
+  const existedUser = await User.findOne({ $or: [{ email }, { userName }] });
 
   if (existedUser) {
     throw new ApiError(409, "User with User name or Email already exists");
@@ -72,7 +72,7 @@ const registerUser = asyncHandler(async (req, res) => {
     fullName,
     email,
     password,
-    username: username.toLowerCase(),
+    userName: userName.toLowerCase(),
     avatar: avatar.url,
     coverImage: coverImage?.url || "",
   });
@@ -95,15 +95,15 @@ const registerUser = asyncHandler(async (req, res) => {
 
 const loginUser = asyncHandler(async (req, res) => {
   // get details from frontend
-  const { email, username, password } = req.body;
+  const { email, userName, password } = req.body;
 
   // validation
-  if (!username || !email) {
+  if (!userName || !email) {
     throw new ApiError(400, "User Name or Password is required");
   }
 
   // find the user
-  const user = await User.find({ $or: [{ username }, { email }] });
+  const user = await User.find({ $or: [{ userName }, { email }] });
   if (!user) {
     throw new ApiError(404, "User does not exists");
   }
@@ -296,6 +296,76 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Cover Image update successfully"));
 });
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { userName } = req.params;
+  if (!userName?.trim()) {
+    throw new ApiError(400, "User name is missing");
+  }
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        userName: userName?.toLowerCase(),
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribed",
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        channelsSubscribedCount: {
+          $size: "$subscribed",
+        },
+        isSubscribed: {
+          $condition: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        fullName: 1,
+        userName: 1,
+        subscribersCount: 1,
+        channelsSubscribedCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+
+  console.log({ channel });
+
+  if (!channel?.length) {
+    throw new ApiError(404, "Channel does not exists");
+  }
+
+  return res
+    .status(200)
+    .ApiResponse(200, channel[0], "User cannel fetched successfully");
+});
+
 export {
   registerUser,
   loginUser,
@@ -306,4 +376,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserChannelProfile,
 };
