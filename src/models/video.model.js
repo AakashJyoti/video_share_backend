@@ -20,7 +20,7 @@ const videoSchema = new Schema(
       required: [true, "Description for video is required"],
     },
     duration: {
-      type: NUmber,
+      type: Number,
       required: [true, "Duration for video is required"],
     },
     views: {
