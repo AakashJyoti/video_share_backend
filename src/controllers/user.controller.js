@@ -102,12 +102,12 @@ const loginUser = asyncHandler(async (req, res) => {
   const { email, userName, password } = req.body;
 
   // validation
-  if (!userName || !email) {
+  if (userName === undefined && email === undefined) {
     throw new ApiError(400, "User Name or Password is required");
   }
 
   // find the user
-  const user = await User.find({ $or: [{ userName }, { email }] });
+  const user = await User.findOne({ $or: [{ userName }, { email }] });
   if (!user) {
     throw new ApiError(404, "User does not exists");
   }
@@ -143,11 +143,17 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const logoutUser = asyncHandler(async (req, res) => {
-  User.findByIdAndUpdate(req.user._id, {
-    $set: {
-      refreshToken: undefined,
+  User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $unset: {
+        refreshToken: 1,
+      },
     },
-  });
+    {
+      new: true,
+    }
+  );
 
   return res
     .status(200)
@@ -376,7 +382,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .ApiResponse(200, channel[0], "User cannel fetched successfully");
+    .json(new ApiResponse(200, channel[0], "User cannel fetched successfully"));
 });
 
 const getWatchHistory = asyncHandler(async (req, res) => {
@@ -424,10 +430,12 @@ const getWatchHistory = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .ApiResponse(
-      200,
-      user[0].watchHistory,
-      "Watch history fetched successfully"
+    .json(
+      new ApiResponse(
+        200,
+        user[0].watchHistory,
+        "Watch history fetched successfully"
+      )
     );
 });
 
